@@ -1,0 +1,39 @@
+# Dependencies
+node_modules/
+frontend/node_modules/
+backend/node_modules/
+.pnp
+.pnp.*
+
+# Next.js Build Output
+.next/
+frontend/.next/
+out/
+frontend/out/
+build/
+frontend/build/
+
+# Python Cache
+__pycache__/
+backend/__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.pytest_cache/
+.venv/
+env/
+venv/
+
+# Environment Variables & Secrets
+.env
+.env.local
+.env.*.local
+frontend/.env.local
+backend/.env
+
+# Local Storage Uploads
+backend/static/recordings/
+
+# OS Files
+.DS_Store
+Thumbs.db
