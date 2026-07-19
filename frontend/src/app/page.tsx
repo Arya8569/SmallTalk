@@ -94,7 +94,7 @@ export default function Home() {
   return (
     <div className="min-h-screen bg-zinc-950 text-zinc-100 flex flex-col font-sans select-none relative overflow-x-hidden">
       {/* MagicRings Interactive Ambient Background */}
-      <div className="absolute inset-0 w-full h-full -z-10 pointer-events-none opacity-20">
+      <div className="absolute inset-0 w-full h-full z-0 pointer-events-none opacity-20">
         <MagicRings
           color="#a855f7"
           colorTwo="#6366f1"

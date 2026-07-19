@@ -195,8 +195,12 @@ export default function MagicRings({
     scene.add(quad);
 
     const resize = () => {
-      const w = mount.clientWidth;
-      const h = mount.clientHeight;
+      let w = mount.clientWidth;
+      let h = mount.clientHeight;
+      if (w === 0 || h === 0) {
+        w = window.innerWidth;
+        h = window.innerHeight;
+      }
       const dpr = Math.min(window.devicePixelRatio, 2);
       renderer.setSize(w, h);
       renderer.setPixelRatio(dpr);
