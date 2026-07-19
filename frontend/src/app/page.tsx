@@ -6,6 +6,7 @@ import { FALLBACK_TOPICS, Topic } from '@/lib/fallbackTopics';
 import CategorySelection, { CATEGORIES } from '@/components/CategorySelection';
 import RouletteSpinner from '@/components/RouletteSpinner';
 import AudioRecorder from '@/components/AudioRecorder';
+import MagicRings from '@/components/MagicRings';
 import { Database, Laptop, Info } from 'lucide-react';
 
 export default function Home() {
@@ -92,9 +93,28 @@ export default function Home() {
 
   return (
     <div className="min-h-screen bg-zinc-950 text-zinc-100 flex flex-col font-sans select-none relative overflow-x-hidden">
-      {/* Decorative ambient background glows */}
-      <div className="absolute top-[-10%] left-[-10%] w-[60%] h-[60%] rounded-full bg-indigo-500/10 blur-[150px] pointer-events-none" />
-      <div className="absolute bottom-[-10%] right-[-10%] w-[60%] h-[60%] rounded-full bg-purple-500/10 blur-[150px] pointer-events-none" />
+      {/* MagicRings Interactive Ambient Background */}
+      <div className="absolute inset-0 w-full h-full -z-10 pointer-events-none opacity-45">
+        <MagicRings
+          color="#312e81"
+          colorTwo="#581c87"
+          ringCount={8}
+          speed={0.8}
+          attenuation={8}
+          lineThickness={1.5}
+          baseRadius={0.25}
+          radiusStep={0.08}
+          scaleRate={0.08}
+          opacity={0.3}
+          blur={10}
+          noiseAmount={0.05}
+          followMouse={true}
+          mouseInfluence={0.15}
+          hoverScale={1.1}
+          parallax={0.03}
+          clickBurst={true}
+        />
+      </div>
 
       {/* Header */}
       <header className="w-full max-w-6xl mx-auto px-4 md:px-6 py-4 md:py-6 flex items-center justify-between border-b border-zinc-900 z-10">
