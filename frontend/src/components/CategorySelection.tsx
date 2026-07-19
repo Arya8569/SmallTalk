@@ -10,6 +10,10 @@ export const CATEGORIES = [
   { id: 'Philosophy', label: 'Philosophy & Deep Thoughts', color: 'from-purple-500 to-pink-600', description: 'Ethics, human nature & big questions' },
   { id: 'Personal Growth', label: 'Personal Growth', color: 'from-amber-500 to-orange-600', description: 'Burnout, habits & self-discovery' },
   { id: 'Culture & Society', label: 'Culture & Society', color: 'from-rose-500 to-red-600', description: 'Globalization, traditions & modern life' },
+  { id: 'Politics & Global Affairs', label: 'Politics & Global Affairs', color: 'from-red-500 to-rose-600', description: 'Governments, policy debates & international relations' },
+  { id: 'Science & Environment', label: 'Science & Environment', color: 'from-emerald-500 to-teal-600', description: 'Physics, nature, biology & eco-sustainability' },
+  { id: 'History & Modern Relevance', label: 'History & Modern Relevance', color: 'from-amber-500 to-orange-600', description: 'Historical events & how they shape the modern world' },
+  { id: 'Abstract & Creative Writing', label: 'Abstract & Creative Writing', color: 'from-fuchsia-500 to-purple-600', description: 'Imaginative queries & creative storytelling prompts' },
 ];
 
 interface CategorySelectionProps {

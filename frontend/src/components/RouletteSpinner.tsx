@@ -118,6 +118,10 @@ export default function RouletteSpinner({
       case 'Philosophy': return 'bg-purple-500/10 text-purple-400 border-purple-500/20';
       case 'Personal Growth': return 'bg-amber-500/10 text-amber-400 border-amber-500/20';
       case 'Culture & Society': return 'bg-rose-500/10 text-rose-400 border-rose-500/20';
+      case 'Arts & Literature': return 'bg-fuchsia-500/10 text-fuchsia-400 border-fuchsia-500/20';
+      case 'History & Education': return 'bg-orange-500/10 text-orange-400 border-orange-500/20';
+      case 'Health & Wellness': return 'bg-teal-500/10 text-teal-400 border-teal-500/20';
+      case 'Travel & Adventure': return 'bg-sky-500/10 text-sky-400 border-sky-500/20';
       default: return 'bg-zinc-800 text-zinc-400 border-zinc-700';
     }
   };

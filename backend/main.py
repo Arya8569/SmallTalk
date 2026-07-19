@@ -12,7 +12,72 @@ from pydantic import BaseModel, Field
 from typing import List, Literal
 from supabase import create_client, Client
 
+import re
 from fastapi.staticfiles import StaticFiles
+
+def generate_heuristic_evaluation(transcript: str) -> dict:
+    words = re.findall(r'\S+|\s+', transcript)
+    
+    fillers = {"um", "uh", "like", "so", "basically", "actually", "literally", "well", "youknow"}
+    strong_words = {
+        "achieve", "achieved", "achieving", "success", "successful", "successfully",
+        "grow", "growth", "growing", "grows", "challenge", "challenges", "challenging",
+        "improve", "improving", "improved", "critical", "significant", "significantly",
+        "opportunity", "opportunities", "future", "benefit", "benefits", "beneficial",
+        "essential", "essentially", "key", "important", "importance", "clearly",
+        "absolute", "absolutely", "creative", "innovative", "innovation", "innovations"
+    }
+    
+    segments = []
+    current_segment = ""
+    current_type = None
+    
+    def add_current():
+        nonlocal current_segment, current_type
+        if current_segment:
+            segments.append({
+                "text_segment": current_segment,
+                "type": current_type
+            })
+            current_segment = ""
+            current_type = None
+            
+    for item in words:
+        if item.isspace():
+            if current_segment:
+                current_segment += item
+            else:
+                current_segment = item
+                current_type = 'neutral'
+            continue
+            
+        word_clean = re.sub(r'[^\w]', '', item.lower())
+        
+        item_type = 'neutral'
+        if word_clean in fillers:
+            item_type = 'red'
+        elif word_clean in strong_words:
+            item_type = 'green'
+            
+        if current_type is None:
+            current_type = item_type
+            current_segment = item
+        elif current_type == item_type:
+            current_segment += item
+        else:
+            add_current()
+            current_type = item_type
+            current_segment = item
+            
+    add_current()
+    
+    red_count = sum(1 for s in segments if s["type"] == 'red')
+    rating = max(1, min(5, 5 - int(red_count / 2)))
+    
+    return {
+        "rating": rating,
+        "transcript_analysis": segments
+    }
 
 # Load local environment variables from backend/.env or root .env
 load_dotenv()
@@ -175,42 +240,53 @@ async def upload_audio(
         if not raw_transcript or len(raw_transcript.strip()) == 0:
             raise HTTPException(status_code=422, detail="Unable to transcribe speech. Please ensure you spoke clearly.")
 
-        # 5. Evaluate transcription via Google Gemini Flash (1.5) with structured schema
-        genai_client = genai.Client(api_key=gemini_api_key)
+        # 5. Evaluate transcription via Google Gemini with structured schema
+        rating = 3
+        transcript_analysis = []
         
-        user_prompt = f"""
-        Original Speaking Prompt: "{prompt_text}"
-        Speech Transcript: "{raw_transcript}"
-        """
-        
-        system_instruction = """
-        You are a strict, professional public speaking coach. Evaluate the user's speech transcript based on the original speaking prompt.
-        
-        Provide:
-        1. A strict rating from 1 to 5 (1 being poor, 5 being exceptional).
-        2. A chronological analysis breaking down the transcript text. Slice the transcript into contiguous, logical segments. For each segment, classify it as:
-           - 'red': grammatical errors, filler words ('uh', 'um', 'like', 'so'), long awkward stuttering.
-           - 'green': high-impact vocabulary, excellent logic flow, strong rhetorical devices.
-           - 'neutral': standard factual connecting text or average transitions.
-        Every word in the transcription must be accounted for. Be highly analytical.
-        """
-        
-        gemini_response = genai_client.models.generate_content(
-            model='gemini-flash-latest',
-            contents=user_prompt,
-            config=types.GenerateContentConfig(
-                system_instruction=system_instruction,
-                response_mime_type="application/json",
-                response_schema=EvaluationResult,
-            ),
-        )
-        
-        feedback_data = json.loads(gemini_response.text)
-        rating = feedback_data.get("rating", 3)
-        
+        try:
+            genai_client = genai.Client(api_key=gemini_api_key)
+            
+            user_prompt = f"""
+            Original Speaking Prompt: "{prompt_text}"
+            Speech Transcript: "{raw_transcript}"
+            """
+            
+            system_instruction = """
+            You are a strict, professional public speaking coach. Evaluate the user's speech transcript based on the original speaking prompt.
+            
+            Provide:
+            1. A strict rating from 1 to 5 (1 being poor, 5 being exceptional).
+            2. A chronological analysis breaking down the transcript text. Slice the transcript into contiguous, logical segments. For each segment, classify it as:
+               - 'red': grammatical errors, filler words ('uh', 'um', 'like', 'so'), long awkward stuttering.
+               - 'green': high-impact vocabulary, excellent logic flow, strong rhetorical devices.
+               - 'neutral': standard factual connecting text or average transitions.
+            Every word in the transcription must be accounted for. Be highly analytical.
+            """
+            
+            gemini_response = genai_client.models.generate_content(
+                model='gemini-2.0-flash',
+                contents=user_prompt,
+                config=types.GenerateContentConfig(
+                    system_instruction=system_instruction,
+                    response_mime_type="application/json",
+                    response_schema=EvaluationResult,
+                ),
+            )
+            
+            feedback_data = json.loads(gemini_response.text)
+            rating = feedback_data.get("rating", 3)
+            transcript_analysis = feedback_data.get("transcript_analysis", [])
+            print("Successfully evaluated speech via Gemini API.")
+        except Exception as gemini_err:
+            print(f"Gemini API call failed, using heuristic fallback. Error details: {gemini_err}")
+            fallback_res = generate_heuristic_evaluation(raw_transcript)
+            rating = fallback_res["rating"]
+            transcript_analysis = fallback_res["transcript_analysis"]
+            
         feedback_json = {
             "transcript": raw_transcript,
-            "analysis": feedback_data.get("transcript_analysis", [])
+            "analysis": transcript_analysis
         }
         
         # 6. Database Insertion into recordings table
