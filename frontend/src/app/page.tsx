@@ -94,24 +94,24 @@ export default function Home() {
   return (
     <div className="min-h-screen bg-zinc-950 text-zinc-100 flex flex-col font-sans select-none relative overflow-x-hidden">
       {/* MagicRings Interactive Ambient Background */}
-      <div className="absolute inset-0 w-full h-full -z-10 pointer-events-none opacity-45">
+      <div className="absolute inset-0 w-full h-full -z-10 pointer-events-none opacity-20">
         <MagicRings
-          color="#312e81"
-          colorTwo="#581c87"
+          color="#a855f7"
+          colorTwo="#6366f1"
           ringCount={8}
-          speed={0.8}
-          attenuation={8}
-          lineThickness={1.5}
-          baseRadius={0.25}
-          radiusStep={0.08}
+          speed={0.5}
+          attenuation={5}
+          lineThickness={2}
+          baseRadius={0.15}
+          radiusStep={0.06}
           scaleRate={0.08}
-          opacity={0.3}
-          blur={10}
-          noiseAmount={0.05}
+          opacity={0.8}
+          blur={2}
+          noiseAmount={0.02}
           followMouse={true}
-          mouseInfluence={0.15}
-          hoverScale={1.1}
-          parallax={0.03}
+          mouseInfluence={0.1}
+          hoverScale={1.15}
+          parallax={0.04}
           clickBurst={true}
         />
       </div>
