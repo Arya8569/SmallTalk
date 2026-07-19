@@ -118,9 +118,9 @@ export default function Home() {
 
       {/* Header */}
       <header className="w-full max-w-6xl mx-auto px-4 md:px-6 py-4 md:py-6 flex items-center justify-between border-b border-zinc-900 z-10">
-        <div className="flex items-center gap-2">
-          <div className="h-8 md:h-9 w-8 md:w-9 rounded-xl bg-gradient-to-tr from-indigo-500 to-purple-600 flex items-center justify-center font-bold text-base md:text-lg text-white shadow-lg shadow-indigo-500/20">
-            S
+        <div className="flex items-center gap-2.5">
+          <div className="h-9 w-9 rounded-xl bg-zinc-900/80 border border-zinc-800/80 flex items-center justify-center overflow-hidden shadow-lg shadow-indigo-500/5">
+            <img src="/logo.png" className="h-7.5 w-7.5 object-contain" alt="SmallTalk Logo" />
           </div>
           <span className="font-bold text-lg md:text-xl tracking-tight bg-gradient-to-r from-zinc-100 to-zinc-300 bg-clip-text text-transparent">
             SmallTalk
