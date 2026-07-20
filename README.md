@@ -1,5 +1,6 @@
 # 🎙️ SmallTalk: Speech Evaluation & Impromptu Practice
 live link: https://small-talk-three.vercel.app/
+
 SmallTalk is a premium full-stack web application designed to help users practice impromptu public speaking. Users select categories, spin an interactive roulette wheel to receive a random prompt, record a 1-to-2 minute speech, and receive instant, structured AI evaluation of their delivery (filler words, grammar, impact phrases) and an overall rating.
 
 ---
