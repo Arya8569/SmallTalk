@@ -329,3 +329,37 @@ async def upload_audio(
             status_code=500,
             detail=f"Internal server error processing speech: {str(e)}"
         )
+
+@app.delete("/recordings/{recording_id}")
+@app.delete("/api/backend/recordings/{recording_id}")
+async def delete_recording(recording_id: str):
+    try:
+        # 1. Fetch recording details to get the audio URL
+        response = supabase_client.table("recordings").select("audio_url").eq("id", recording_id).execute()
+        if not response.data or len(response.data) == 0:
+            raise HTTPException(status_code=404, detail="Recording not found")
+            
+        audio_url = response.data[0].get("audio_url")
+        
+        # 2. If it's a Supabase storage URL, delete the file from the bucket
+        if audio_url and "storage/v1/object/public/recordings/" in audio_url:
+            try:
+                # Extract filename from URL
+                filename = audio_url.split("/recordings/")[-1]
+                supabase_client.storage.from_("recordings").remove([filename])
+                print(f"Successfully deleted storage file from bucket: {filename}")
+            except Exception as storage_err:
+                print(f"Failed to delete storage file from bucket: {storage_err}")
+                
+        # 3. Delete the database row
+        supabase_client.table("recordings").delete().eq("id", recording_id).execute()
+        print(f"Successfully deleted database record for recording ID: {recording_id}")
+        
+        return {"status": "success", "message": f"Recording {recording_id} deleted successfully"}
+        
+    except Exception as e:
+        print(f"Error during recording deletion: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Internal server error deleting recording: {str(e)}"
+        )

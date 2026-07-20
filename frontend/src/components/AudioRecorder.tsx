@@ -168,6 +168,21 @@ export default function AudioRecorder({ topicId, promptText, onUploadSuccess, on
     }
   };
 
+  const handleTryAnotherTopic = async () => {
+    if (evaluation && evaluation.id) {
+      try {
+        const backendApiUrl = process.env.NEXT_PUBLIC_BACKEND_API_URL || 'http://localhost:8000';
+        fetch(`${backendApiUrl}/recordings/${evaluation.id}`, {
+          method: 'DELETE',
+        }).catch((err) => console.error('Failed to delete recording:', err));
+        console.log(`Triggered deletion for recording: ${evaluation.id}`);
+      } catch (err) {
+        console.error('Failed to trigger deletion on reset:', err);
+      }
+    }
+    onReset();
+  };
+
   return (
     <div className="w-full max-w-3xl mx-auto flex flex-col gap-6">
       
@@ -419,7 +434,7 @@ export default function AudioRecorder({ topicId, promptText, onUploadSuccess, on
           {/* Reset Page Action */}
           <div className="border-t border-zinc-850 pt-6 mt-2 flex items-center justify-center">
             <button
-              onClick={onReset}
+              onClick={handleTryAnotherTopic}
               className="px-6 py-3.5 bg-indigo-600 hover:bg-indigo-500 active:scale-95 text-white text-sm font-semibold rounded-xl transition-all duration-200 shadow-lg shadow-indigo-900/10 flex items-center gap-2 cursor-pointer"
             >
               <RefreshCw className="h-4 w-4" />

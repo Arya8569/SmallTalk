@@ -56,11 +56,18 @@ export default function Home() {
           .limit(1);
 
         if (error || !data) {
+          console.error('Supabase connection check failed:', {
+            message: error?.message,
+            details: error?.details,
+            hint: error?.hint,
+            code: error?.code
+          });
           setDbStatus('local_fallback');
         } else {
           setDbStatus('connected');
         }
       } catch (err) {
+        console.error('Supabase connection check threw exception:', err);
         setDbStatus('local_fallback');
       }
     }
@@ -112,7 +119,12 @@ export default function Home() {
       }
       
       if (error) {
-        console.warn('Supabase fetch failed. Using local fallback. Details:', error);
+        console.warn('Supabase fetch failed. Using local fallback. Details:', {
+          message: error.message,
+          details: error.details,
+          hint: error.hint,
+          code: error.code
+        });
       }
     } catch (err) {
       console.warn('Failed to query Supabase RPC. Using local fallback. Details:', err);
