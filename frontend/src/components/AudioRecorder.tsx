@@ -52,6 +52,24 @@ export default function AudioRecorder({ topicId, promptText, onUploadSuccess, on
     };
   }, []);
 
+  // Clean up active recording if browser tab/window is closed or navigated away
+  useEffect(() => {
+    const handleBeforeUnload = () => {
+      if (evaluation && evaluation.id) {
+        const backendApiUrl = process.env.NEXT_PUBLIC_BACKEND_API_URL || 'http://localhost:8000';
+        fetch(`${backendApiUrl}/recordings/${evaluation.id}`, {
+          method: 'DELETE',
+          keepalive: true,
+        });
+      }
+    };
+
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    return () => {
+      window.removeEventListener('beforeunload', handleBeforeUnload);
+    };
+  }, [evaluation]);
+
   const stopMediaStream = () => {
     if (streamRef.current) {
       streamRef.current.getTracks().forEach((track) => track.stop());
