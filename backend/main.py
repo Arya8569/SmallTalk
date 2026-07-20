@@ -162,14 +162,17 @@ FALLBACK_PROMPTS = {
 }
 
 @app.get("/")
+@app.get("/api/backend")
 def read_root():
     return {"message": "Welcome to the Speech Evaluation API"}
 
 @app.get("/health")
+@app.get("/api/backend/health")
 def health_check():
     return {"status": "healthy", "service": "speech-evaluation-api"}
 
 @app.post("/upload")
+@app.post("/api/backend/upload")
 async def upload_audio(
     file: UploadFile = File(...),
     topic_id: int = Form(...)
