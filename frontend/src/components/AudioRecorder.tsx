@@ -141,7 +141,8 @@ export default function AudioRecorder({ topicId, promptText, onUploadSuccess, on
       formData.append('file', blobToUpload, `recording-${topicId}-${Date.now()}.webm`);
       formData.append('topic_id', topicId.toString());
 
-      const response = await fetch('http://localhost:8000/upload', {
+      const backendApiUrl = process.env.NEXT_PUBLIC_BACKEND_API_URL || 'http://localhost:8000';
+      const response = await fetch(`${backendApiUrl}/upload`, {
         method: 'POST',
         body: formData,
       });

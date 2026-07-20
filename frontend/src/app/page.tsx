@@ -25,6 +25,16 @@ export default function Home() {
 
   const handleLanded = (topic: Topic) => {
     setSettledTopic(topic);
+    try {
+      const seenStr = localStorage.getItem('smalltalk_seen_topics');
+      const seenIds: number[] = seenStr ? JSON.parse(seenStr) : [];
+      if (!seenIds.includes(topic.id)) {
+        seenIds.push(topic.id);
+        localStorage.setItem('smalltalk_seen_topics', JSON.stringify(seenIds));
+      }
+    } catch (e) {
+      console.warn('Failed to save seen topic to localStorage:', e);
+    }
   };
 
   const handleClear = () => {
@@ -59,29 +69,73 @@ export default function Home() {
 
   // Callback to fetch a random topic based on selected categories
   const handleSpinForTopic = async (): Promise<Topic | null> => {
+    let seenIds: number[] = [];
+    try {
+      const seenStr = localStorage.getItem('smalltalk_seen_topics');
+      if (seenStr) {
+        seenIds = JSON.parse(seenStr);
+      }
+    } catch (e) {
+      console.warn('Failed to read seen topics from localStorage:', e);
+    }
+
     // 1. Attempt to fetch from Supabase via get_random_topic RPC function
     try {
       const { data, error } = await supabase.rpc('get_random_topic', {
         categories_filter: selectedCategories,
+        exclude_ids: seenIds,
       });
 
       if (!error && data && data.length > 0) {
-        // Double check formatting matches our interface
         const topic = data[0] as Topic;
         setDbStatus('connected');
         return topic;
       }
+
+      // If we got empty results, we might have seen all topics. Let's try resetting seen list.
+      if (!error && seenIds.length > 0) {
+        console.log('All topics in selected categories have been seen. Resetting seen topics...');
+        try {
+          localStorage.removeItem('smalltalk_seen_topics');
+        } catch (e) {}
+        
+        // Re-query without exclusions
+        const retryRes = await supabase.rpc('get_random_topic', {
+          categories_filter: selectedCategories,
+          exclude_ids: [],
+        });
+        if (!retryRes.error && retryRes.data && retryRes.data.length > 0) {
+          const topic = retryRes.data[0] as Topic;
+          setDbStatus('connected');
+          return topic;
+        }
+      }
       
-      console.warn('Supabase fetch failed or returned empty. Using local fallback. Details:', error);
+      if (error) {
+        console.warn('Supabase fetch failed. Using local fallback. Details:', error);
+      }
     } catch (err) {
       console.warn('Failed to query Supabase RPC. Using local fallback. Details:', err);
     }
 
     // 2. Local Fallback Mode
     setDbStatus('local_fallback');
-    const filteredFallbacks = FALLBACK_TOPICS.filter((topic) =>
-      selectedCategories.includes(topic.category)
+    let filteredFallbacks = FALLBACK_TOPICS.filter((topic) =>
+      selectedCategories.includes(topic.category) && !seenIds.includes(topic.id)
     );
+
+    if (filteredFallbacks.length === 0) {
+      // If we have seen all fallback topics in these categories, reset seen list
+      if (seenIds.length > 0) {
+        console.log('All fallback topics in selected categories have been seen. Resetting seen topics...');
+        try {
+          localStorage.removeItem('smalltalk_seen_topics');
+        } catch (e) {}
+        filteredFallbacks = FALLBACK_TOPICS.filter((topic) =>
+          selectedCategories.includes(topic.category)
+        );
+      }
+    }
 
     if (filteredFallbacks.length === 0) {
       return null;

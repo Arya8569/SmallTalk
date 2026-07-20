@@ -16,12 +16,13 @@ CREATE TABLE IF NOT EXISTS recordings (
 );
 
 -- Create a helper function to fetch a random topic filtered by categories
-CREATE OR REPLACE FUNCTION get_random_topic(categories_filter TEXT[])
+CREATE OR REPLACE FUNCTION get_random_topic(categories_filter TEXT[], exclude_ids INT[] DEFAULT '{}')
 RETURNS SETOF topics AS $$
 BEGIN
     RETURN QUERY
     SELECT * FROM topics
     WHERE category = ANY(categories_filter)
+      AND NOT (id = ANY(exclude_ids))
     ORDER BY random()
     LIMIT 1;
 END;

@@ -93,10 +93,14 @@ os.makedirs("backend/static/recordings", exist_ok=True)
 app.mount("/static", StaticFiles(directory="backend/static"), name="static")
 
 # Configure CORS Middleware
-origins = [
-    "http://localhost:3000",
-    "http://127.0.0.1:3000",
-]
+allowed_origins_str = os.getenv("ALLOWED_ORIGINS", "")
+if allowed_origins_str:
+    origins = [origin.strip() for origin in allowed_origins_str.split(",") if origin.strip()]
+else:
+    origins = [
+        "http://localhost:3000",
+        "http://127.0.0.1:3000",
+    ]
 
 app.add_middleware(
     CORSMiddleware,
