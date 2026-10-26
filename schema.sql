@@ -32,16 +32,16 @@ $$ LANGUAGE plpgsql;
 ALTER TABLE topics ENABLE ROW LEVEL SECURITY;
 ALTER TABLE recordings ENABLE ROW LEVEL SECURITY;
 
--- Allow anonymous select for topics (necessary for the public frontend)
+-- Allow public select for topics
 CREATE POLICY "Allow public read access to topics" ON topics
-    FOR SELECT TO anon USING (true);
+    FOR SELECT TO PUBLIC USING (true);
 
--- Allow anonymous insert/select for recordings
+-- Allow public insert/select for recordings
 CREATE POLICY "Allow public insert to recordings" ON recordings
-    FOR INSERT TO anon WITH CHECK (true);
+    FOR INSERT TO PUBLIC WITH CHECK (true);
 
 CREATE POLICY "Allow public read access to recordings" ON recordings
-    FOR SELECT TO anon USING (true);
+    FOR SELECT TO PUBLIC USING (true);
 
 -- Truncate topics table if it exists to ensure fresh seed
 TRUNCATE TABLE topics CASCADE;

@@ -1,7 +1,6 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { supabase } from '@/lib/supabaseClient';
 import { FALLBACK_TOPICS, Topic } from '@/lib/fallbackTopics';
 import CategorySelection, { CATEGORIES } from '@/components/CategorySelection';
 import RouletteSpinner from '@/components/RouletteSpinner';
@@ -45,29 +44,21 @@ export default function Home() {
     console.log('Audio uploaded successfully to GCS:', url);
   };
 
-  // Verify connection to Supabase on mount
+  // Verify connection to Neon on mount
   useEffect(() => {
     async function checkConnection() {
       try {
-        // Query one record from topics to test database connectivity
-        const { data, error } = await supabase
-          .from('topics')
-          .select('id')
-          .limit(1);
+        const res = await fetch('/api/health');
+        const data = await res.json();
 
-        if (error || !data) {
-          console.error('Supabase connection check failed:', {
-            message: error?.message,
-            details: error?.details,
-            hint: error?.hint,
-            code: error?.code
-          });
-          setDbStatus('local_fallback');
-        } else {
+        if (res.ok && data.status === 'connected') {
           setDbStatus('connected');
+        } else {
+          console.error('Neon connection check failed:', data);
+          setDbStatus('local_fallback');
         }
       } catch (err) {
-        console.error('Supabase connection check threw exception:', err);
+        console.error('Neon connection check threw exception:', err);
         setDbStatus('local_fallback');
       }
     }
@@ -86,48 +77,55 @@ export default function Home() {
       console.warn('Failed to read seen topics from localStorage:', e);
     }
 
-    // 1. Attempt to fetch from Supabase via get_random_topic RPC function
+    // 1. Attempt to fetch from Neon via /api/topics/random
     try {
-      const { data, error } = await supabase.rpc('get_random_topic', {
-        categories_filter: selectedCategories,
-        exclude_ids: seenIds,
+      const response = await fetch('/api/topics/random', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          categories_filter: selectedCategories,
+          exclude_ids: seenIds,
+        }),
       });
 
-      if (!error && data && data.length > 0) {
+      const resJson = await response.json();
+      const data = resJson.data;
+
+      if (response.ok && data && data.length > 0) {
         const topic = data[0] as Topic;
         setDbStatus('connected');
         return topic;
       }
 
       // If we got empty results, we might have seen all topics. Let's try resetting seen list.
-      if (!error && seenIds.length > 0) {
+      if (seenIds.length > 0) {
         console.log('All topics in selected categories have been seen. Resetting seen topics...');
         try {
           localStorage.removeItem('smalltalk_seen_topics');
         } catch (e) {}
         
         // Re-query without exclusions
-        const retryRes = await supabase.rpc('get_random_topic', {
-          categories_filter: selectedCategories,
-          exclude_ids: [],
+        const retryRes = await fetch('/api/topics/random', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            categories_filter: selectedCategories,
+            exclude_ids: [],
+          }),
         });
-        if (!retryRes.error && retryRes.data && retryRes.data.length > 0) {
-          const topic = retryRes.data[0] as Topic;
+        const retryJson = await retryRes.json();
+        if (retryRes.ok && retryJson.data && retryJson.data.length > 0) {
+          const topic = retryJson.data[0] as Topic;
           setDbStatus('connected');
           return topic;
         }
       }
       
-      if (error) {
-        console.warn('Supabase fetch failed. Using local fallback. Details:', {
-          message: error.message,
-          details: error.details,
-          hint: error.hint,
-          code: error.code
-        });
+      if (!response.ok) {
+        console.warn('Neon fetch failed. Using local fallback. Details:', resJson.error);
       }
     } catch (err) {
-      console.warn('Failed to query Supabase RPC. Using local fallback. Details:', err);
+      console.warn('Failed to query Neon API. Using local fallback. Details:', err);
     }
 
     // 2. Local Fallback Mode
@@ -206,7 +204,7 @@ export default function Home() {
               <div className="h-2 w-2 rounded-full bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.8)]" />
               <span className="text-xs text-zinc-300 font-medium flex items-center gap-1">
                 <Database className="h-3 w-3 text-emerald-400" />
-                Supabase Online
+                Neon Online
               </span>
             </>
           )}
@@ -240,9 +238,9 @@ export default function Home() {
           <section className="p-4 rounded-xl bg-amber-950/20 border border-amber-900/30 flex gap-3 text-amber-400/90 text-xs max-w-3xl mx-auto">
             <Info className="h-4 w-4 shrink-0 mt-0.5" />
             <div>
-              <span className="font-semibold text-amber-300">Database setup check:</span> The Supabase client could not reach your schema. 
+              <span className="font-semibold text-amber-300">Database setup check:</span> The Neon client could not reach your database schema. 
               SmallTalk is automatically running in <strong>Local Preview Mode</strong> using the seeded list of 180 prompts. 
-              To pull from your cloud database, please verify your tables are seeded in the Supabase SQL Editor and your credentials are added to <code className="bg-amber-950/40 px-1 py-0.5 rounded text-amber-200">.env</code>.
+              To pull from your cloud database, please verify your tables are seeded in Neon and your credentials are added to <code className="bg-amber-950/40 px-1 py-0.5 rounded text-amber-200">.env.local</code>.
             </div>
           </section>
         )}

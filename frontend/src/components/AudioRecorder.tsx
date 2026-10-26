@@ -159,14 +159,29 @@ export default function AudioRecorder({ topicId, promptText, onUploadSuccess, on
       formData.append('file', blobToUpload, `recording-${topicId}-${Date.now()}.webm`);
       formData.append('topic_id', topicId.toString());
 
-      const backendApiUrl = process.env.NEXT_PUBLIC_BACKEND_API_URL || 'http://localhost:8000';
+      const backendApiUrl = process.env.NEXT_PUBLIC_BACKEND_API_URL || 
+        (typeof window !== 'undefined' && window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1' 
+          ? '/api/backend' 
+          : 'http://localhost:8000');
       const response = await fetch(`${backendApiUrl}/upload`, {
         method: 'POST',
         body: formData,
       });
 
       if (!response.ok) {
-        throw new Error(`Upload server responded with status: ${response.status}`);
+        let errDetail = `Upload server responded with status: ${response.status}`;
+        try {
+          const errJson = await response.json();
+          if (errJson && errJson.detail) {
+            errDetail += ` - ${errJson.detail}`;
+          }
+        } catch (_) {
+          try {
+            const errText = await response.text();
+            if (errText) errDetail += ` - ${errText.slice(0, 150)}`;
+          } catch (_) {}
+        }
+        throw new Error(errDetail);
       }
 
       const data = (await response.json()) as EvaluationRecord;
@@ -189,7 +204,10 @@ export default function AudioRecorder({ topicId, promptText, onUploadSuccess, on
   const handleTryAnotherTopic = async () => {
     if (evaluation && evaluation.id) {
       try {
-        const backendApiUrl = process.env.NEXT_PUBLIC_BACKEND_API_URL || 'http://localhost:8000';
+        const backendApiUrl = process.env.NEXT_PUBLIC_BACKEND_API_URL || 
+          (typeof window !== 'undefined' && window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1' 
+            ? '/api/backend' 
+            : 'http://localhost:8000');
         fetch(`${backendApiUrl}/recordings/${evaluation.id}`, {
           method: 'DELETE',
         }).catch((err) => console.error('Failed to delete recording:', err));

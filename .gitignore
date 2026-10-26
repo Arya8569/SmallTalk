@@ -37,3 +37,4 @@ backend/static/recordings/
 # OS Files
 .DS_Store
 Thumbs.db
+.neon

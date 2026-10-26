@@ -10,7 +10,10 @@ from google import genai
 from google.genai import types
 from pydantic import BaseModel, Field
 from typing import List, Literal
-from supabase import create_client, Client
+import psycopg2
+from psycopg2.extras import RealDictCursor
+import boto3
+from botocore.client import Config
 
 import re
 from fastapi.staticfiles import StaticFiles
@@ -89,8 +92,11 @@ app = FastAPI(
 )
 
 # Ensure local static directory exists for fallback recording hosting
-os.makedirs("backend/static/recordings", exist_ok=True)
-app.mount("/static", StaticFiles(directory="backend/static"), name="static")
+try:
+    os.makedirs("backend/static/recordings", exist_ok=True)
+    app.mount("/static", StaticFiles(directory="backend/static"), name="static")
+except Exception as static_err:
+    print(f"Notice: static dir mount skipped: {static_err}")
 
 # Configure CORS Middleware
 allowed_origins_str = os.getenv("ALLOWED_ORIGINS", "")
@@ -110,19 +116,38 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Initialize Supabase, Groq, and Gemini GenAI Clients
-supabase_url = os.getenv("NEXT_PUBLIC_SUPABASE_URL")
-supabase_key = os.getenv("NEXT_PUBLIC_SUPABASE_ANON_KEY")
+# Initialize API Keys, Neon Postgres, and Neon Object Storage Clients
 groq_api_key = os.getenv("GROQ_API_KEY")
 gemini_api_key = os.getenv("GEMINI_API_KEY")
+database_url = os.getenv("DATABASE_URL") or os.getenv("DATABASE_URL_UNPOOLED")
 
-if not all([supabase_url, supabase_key, groq_api_key, gemini_api_key]):
-    print("Warning: Missing required API keys in environment variables!")
+s3_endpoint = os.getenv("AWS_ENDPOINT_URL_S3")
+s3_access_key = os.getenv("AWS_ACCESS_KEY_ID")
+s3_secret_key = os.getenv("AWS_SECRET_ACCESS_KEY")
+s3_region = os.getenv("AWS_REGION", "us-east-2")
+NEON_BUCKET_NAME = "recordings"
 
-supabase_client: Client = create_client(
-    supabase_url or "https://placeholder.supabase.co",
-    supabase_key or "placeholder-key"
-)
+if not all([groq_api_key, gemini_api_key]):
+    print("Warning: Missing required LLM API keys in environment variables!")
+
+def get_db():
+    if not database_url:
+        raise ValueError("DATABASE_URL is not set in environment variables!")
+    return psycopg2.connect(database_url)
+
+s3_client = None
+if s3_endpoint and s3_access_key and s3_secret_key:
+    s3_client = boto3.client(
+        "s3",
+        endpoint_url=s3_endpoint,
+        aws_access_key_id=s3_access_key,
+        aws_secret_access_key=s3_secret_key,
+        region_name=s3_region,
+        config=Config(s3={"addressing_style": "path"})
+    )
+    print("Initialized Neon Object Storage S3 client.")
+else:
+    print("Warning: Neon Object Storage credentials not fully set; will use local fallback.")
 
 # Pydantic Schemas for Structured LLM Outputs
 class Segment(BaseModel):
@@ -171,6 +196,23 @@ def read_root():
 def health_check():
     return {"status": "healthy", "service": "speech-evaluation-api"}
 
+@app.get("/topics/random")
+@app.get("/api/backend/topics/random")
+def get_random_topic_endpoint(categories: str = "Casual,Professional,Technology,Philosophy,Personal Growth,Culture & Society", exclude_ids: str = ""):
+    cat_list = [c.strip() for c in categories.split(",") if c.strip()]
+    ex_list = [int(i.strip()) for i in exclude_ids.split(",") if i.strip().isdigit()]
+    try:
+        with get_db() as conn:
+            with conn.cursor(cursor_factory=RealDictCursor) as cur:
+                cur.execute("SELECT * FROM get_random_topic(%s, %s);", (cat_list, ex_list))
+                rows = cur.fetchall()
+                if rows:
+                    return [dict(r) for r in rows]
+    except Exception as e:
+        print(f"Error fetching topic from Neon DB: {e}")
+    # Fallback
+    return [{"id": 1, "category": "Casual", "prompt": FALLBACK_PROMPTS.get(1)}]
+
 @app.post("/upload")
 @app.post("/api/backend/upload")
 async def upload_audio(
@@ -181,56 +223,63 @@ async def upload_audio(
     if not file.content_type.startswith("audio/"):
         raise HTTPException(status_code=400, detail="Uploaded file is not an audio format")
 
-    # 2. Get prompt context
+    # 2. Get prompt context from Neon Postgres
     prompt_text = "General topic speech evaluation"
     try:
-        topic_response = supabase_client.table("topics").select("prompt").eq("id", topic_id).execute()
-        if topic_response.data and len(topic_response.data) > 0:
-            prompt_text = topic_response.data[0]["prompt"]
-        else:
-            prompt_text = FALLBACK_PROMPTS.get(topic_id, "General speech topic")
+        with get_db() as conn:
+            with conn.cursor(cursor_factory=RealDictCursor) as cur:
+                cur.execute("SELECT prompt FROM topics WHERE id = %s;", (topic_id,))
+                topic_row = cur.fetchone()
+                if topic_row:
+                    prompt_text = topic_row["prompt"]
+                else:
+                    prompt_text = FALLBACK_PROMPTS.get(topic_id, "General speech topic")
     except Exception as db_err:
-        print(f"Supabase prompt lookup failed: {db_err}")
+        print(f"Neon prompt lookup failed: {db_err}")
         prompt_text = FALLBACK_PROMPTS.get(topic_id, "General speech topic")
 
     try:
         public_url = None
         
-        # 3. Upload recording to Supabase Storage bucket named 'recordings'
+        # 3. Upload recording to Neon Object Storage bucket named 'recordings'
         try:
-            from storage3.types import FileOptions
-            
+            if s3_client is None:
+                raise ValueError("S3 client not initialized")
+                
             unique_filename = f"{uuid.uuid4()}-{file.filename}"
-            
-            # Read file bytes
             file.file.seek(0)
             file_bytes = file.file.read()
             
-            # Upload directly to Supabase storage
-            supabase_client.storage.from_("recordings").upload(
-                path=unique_filename,
-                file=file_bytes,
-                file_options=FileOptions(content_type=file.content_type)
+            s3_client.put_object(
+                Bucket=NEON_BUCKET_NAME,
+                Key=unique_filename,
+                Body=file_bytes,
+                ContentType=file.content_type
             )
             
-            # Generate the public URL
-            public_url = supabase_client.storage.from_("recordings").get_public_url(unique_filename)
-            print(f"Successfully uploaded recording to Supabase Storage: {public_url}")
+            # Construct public URL for Neon Object Storage
+            public_url = f"{s3_endpoint}/{NEON_BUCKET_NAME}/{unique_filename}"
+            print(f"Successfully uploaded recording to Neon Object Storage: {public_url}")
         except Exception as storage_err:
-            print(f"Supabase Storage Upload failed (falling back to local static file serving): {storage_err}")
+            print(f"Neon Storage Upload failed (falling back to local static file serving): {storage_err}")
             
-            # Local fallback storage
+            # Local fallback storage (with safe fallback for serverless read-only filesystems)
             local_id = str(uuid.uuid4())
             local_filename = f"{local_id}-{file.filename}"
-            local_path = f"backend/static/recordings/{local_filename}"
-            
-            file.file.seek(0)
-            with open(local_path, "wb") as local_file:
-                local_file.write(file.file.read())
-                
-            # Point to local server hosting path
-            public_url = f"http://localhost:8000/static/recordings/{local_filename}"
-            print(f"Successfully saved recording to local storage fallback: {public_url}")
+            try:
+                os.makedirs("backend/static/recordings", exist_ok=True)
+                local_path = f"backend/static/recordings/{local_filename}"
+                file.file.seek(0)
+                with open(local_path, "wb") as local_file:
+                    local_file.write(file.file.read())
+                public_url = f"http://localhost:8000/static/recordings/{local_filename}"
+            except Exception as write_err:
+                tmp_path = os.path.join("/tmp", local_filename)
+                file.file.seek(0)
+                with open(tmp_path, "wb") as local_file:
+                    local_file.write(file.file.read())
+                public_url = f"/api/backend/static/{local_filename}"
+            print(f"Saved recording to fallback storage: {public_url}")
         
         # 4. Transcribe recording via Groq Whisper API
         # Read the uploaded file bytes
@@ -296,23 +345,31 @@ async def upload_audio(
             "analysis": transcript_analysis
         }
         
-        # 6. Database Insertion into recordings table
+        # 6. Database Insertion into recordings table in Neon Postgres
         record_id = str(uuid.uuid4())
-        created_at_str = datetime.now(timezone.utc).isoformat()
+        created_at_dt = datetime.now(timezone.utc)
+        created_at_str = created_at_dt.isoformat()
         
         try:
-            insert_response = supabase_client.table("recordings").insert({
-                "topic_id": topic_id,
-                "audio_url": public_url,
-                "rating": rating,
-                "feedback_json": feedback_json
-            }).execute()
-            
-            if insert_response.data and len(insert_response.data) > 0:
-                # Return the saved database record
-                return insert_response.data[0]
+            with get_db() as conn:
+                with conn.cursor(cursor_factory=RealDictCursor) as cur:
+                    cur.execute(
+                        """
+                        INSERT INTO recordings (id, topic_id, audio_url, rating, feedback_json, created_at)
+                        VALUES (%s, %s, %s, %s, %s, %s)
+                        RETURNING id, topic_id, audio_url, rating, feedback_json, created_at;
+                        """,
+                        (record_id, topic_id, public_url, rating, json.dumps(feedback_json), created_at_dt)
+                    )
+                    saved_row = cur.fetchone()
+                    conn.commit()
+                    if saved_row:
+                        saved_dict = dict(saved_row)
+                        if isinstance(saved_dict.get("created_at"), datetime):
+                            saved_dict["created_at"] = saved_dict["created_at"].isoformat()
+                        return saved_dict
         except Exception as db_insert_err:
-            print(f"Supabase insert failed, returning local payload fallback: {db_insert_err}")
+            print(f"Neon DB insert failed, returning local payload fallback: {db_insert_err}")
             
         return {
             "id": record_id,
@@ -334,27 +391,30 @@ async def upload_audio(
 @app.delete("/api/backend/recordings/{recording_id}")
 async def delete_recording(recording_id: str):
     try:
-        # 1. Fetch recording details to get the audio URL
-        response = supabase_client.table("recordings").select("audio_url").eq("id", recording_id).execute()
-        if not response.data or len(response.data) == 0:
-            raise HTTPException(status_code=404, detail="Recording not found")
-            
-        audio_url = response.data[0].get("audio_url")
-        
-        # 2. If it's a Supabase storage URL, delete the file from the bucket
-        if audio_url and "storage/v1/object/public/recordings/" in audio_url:
-            try:
-                # Extract filename from URL
-                filename = audio_url.split("/recordings/")[-1]
-                supabase_client.storage.from_("recordings").remove([filename])
-                print(f"Successfully deleted storage file from bucket: {filename}")
-            except Exception as storage_err:
-                print(f"Failed to delete storage file from bucket: {storage_err}")
+        # 1. Fetch recording details to get the audio URL from Neon
+        audio_url = None
+        with get_db() as conn:
+            with conn.cursor(cursor_factory=RealDictCursor) as cur:
+                cur.execute("SELECT audio_url FROM recordings WHERE id = %s;", (recording_id,))
+                row = cur.fetchone()
+                if not row:
+                    raise HTTPException(status_code=404, detail="Recording not found")
+                audio_url = row.get("audio_url")
                 
-        # 3. Delete the database row
-        supabase_client.table("recordings").delete().eq("id", recording_id).execute()
-        print(f"Successfully deleted database record for recording ID: {recording_id}")
-        
+                # 2. If it's stored in Neon Object Storage, delete the file from the bucket
+                if audio_url and f"/{NEON_BUCKET_NAME}/" in audio_url and s3_client:
+                    try:
+                        filename = audio_url.split(f"/{NEON_BUCKET_NAME}/")[-1]
+                        s3_client.delete_object(Bucket=NEON_BUCKET_NAME, Key=filename)
+                        print(f"Successfully deleted storage file from Neon bucket: {filename}")
+                    except Exception as s3_del_err:
+                        print(f"Failed to delete storage file from Neon bucket: {s3_del_err}")
+                        
+                # 3. Delete the database row from Neon
+                cur.execute("DELETE FROM recordings WHERE id = %s;", (recording_id,))
+                conn.commit()
+                print(f"Successfully deleted database record for recording ID: {recording_id}")
+                
         return {"status": "success", "message": f"Recording {recording_id} deleted successfully"}
         
     except Exception as e:

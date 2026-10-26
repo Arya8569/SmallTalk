@@ -16,15 +16,15 @@ SmallTalk is a premium full-stack web application designed to help users practic
     *   **High-Impact Vocabulary (Green):** Highlights powerful rhetorical phrases, transitions, and strong vocabulary.
     *   **Neutral Text (Gray):** Captures standard connecting context.
     *   **Strict Rating (1-5):** Provides a public-speaking coach assessment.
-*   **Supabase Storage & DB Integration:** Speeches and feedback data are stored securely, with a fully offline preview mode fallback if the database is disconnected.
+*   **Neon Storage & DB Integration:** Speeches and feedback data are stored securely in Neon PostgreSQL and Neon Object Storage, with a fully offline preview mode fallback if the database is disconnected.
 
 ---
 
 ## 🛠️ Technology Stack
 
-*   **Frontend:** React / Next.js (TypeScript, Tailwind CSS, Lucide Icons)
-*   **Backend:** Python / FastAPI (Uvicorn, Pydantic Structured Outputs)
-*   **Database & Storage:** Supabase (PostgreSQL, Row Level Security, Supabase Storage)
+*   **Frontend:** React / Next.js (TypeScript, Tailwind CSS, Lucide Icons, `@neondatabase/serverless`)
+*   **Backend:** Python / FastAPI (Uvicorn, Pydantic Structured Outputs, `psycopg2`, `boto3`)
+*   **Database & Storage:** Neon (Lakebase PostgreSQL, Neon Object Storage S3)
 *   **AI Models:** Groq Whisper (`whisper-large-v3`), Google Gemini (`gemini-2.0-flash`)
 
 ---
@@ -53,8 +53,8 @@ SmallTalk/
 ### 1. Prerequisites
 Make sure you have **Node.js (v18+)** and **Python (v3.8+)** installed.
 
-### 2. Database Setup (Supabase)
-Run the SQL script inside [schema.sql](file:///d:/PROJECTS/SmallTalk/schema.sql) in your Supabase SQL Editor. This will create the `topics` and `recordings` tables, configure row-level security, and install the `get_random_topic` RPC function.
+### 2. Database & Storage Setup (Neon)
+Run the SQL script inside [schema.sql](file:///d:/PROJECTS/SmallTalk/schema.sql) in your Neon SQL Editor. This will create the `topics` and `recordings` tables and install the `get_random_topic` stored function. The `recordings` bucket in Neon Object Storage is automatically managed by `neon.ts`.
 
 ### 3. Run Backend (FastAPI)
 1. Navigate to the `backend` folder:
